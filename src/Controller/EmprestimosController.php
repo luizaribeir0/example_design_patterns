@@ -31,11 +31,14 @@ class EmprestimosController extends AppController
     public function add()
     {
         if ($this->request->is('post')) {
-            if ($this->service->registrarEmprestimo($this->request->getData())) {
+            try {
+                $this->service->registrarEmprestimo($this->request->getData());
                 $this->Flash->success(__('O empréstimo foi registrado com sucesso.'));
+
                 return $this->redirect(['action' => 'index']);
+            } catch (\RuntimeException $e) {
+                $this->Flash->error($e->getMessage());
             }
-            $this->Flash->error(__('Não foi possível registrar o empréstimo.'));
         }
 
         $emprestimo = $this->Emprestimos->newEmptyEntity();
@@ -45,12 +48,16 @@ class EmprestimosController extends AppController
 
     public function devolver($id = null)
     {
-        if ($this->service->registrarDevolucao((int)$id)) {
+        try {
+            $this->service->registrarDevolucao((int)$id);
             $this->Flash->success(__('O empréstimo foi devolvido com sucesso.'));
-        } else {
-            $this->Flash->error(__('Não foi possível devolver este empréstimo.'));
+
+            return $this->redirect(['action' => 'index']);
+        } catch (\RuntimeException $e) {
+            $this->Flash->error($e->getMessage());
+
+            return $this->redirect(['action' => 'index']);
         }
-        return $this->redirect(['action' => 'index']);
     }
 
     public function delete($id = null)

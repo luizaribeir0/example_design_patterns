@@ -109,13 +109,11 @@ class EmprestimosTable extends Table
     /**
      * Cria e salva um novo empréstimo, se o livro estiver disponível.
      */
-    public function registrarEmprestimo(int $livroId, int $usuarioId, FrozenDate $data): bool
+    public function registrarEmprestimo(int $livroId, int $usuarioId, FrozenDate $data): void
     {
-        $livrosTable = $this->getAssociation('Livros')->getTarget();
-        $livro = $livrosTable->get($livroId);
-
+        $livro = $this->Livros->get($livroId);
         if (!$livro->estaDisponivel()) {
-            return false;
+            throw new \RuntimeException("O livro " . $livro->titulo . " não está disponível para empréstimo");
         }
 
         $existe = $this->find()
@@ -127,7 +125,7 @@ class EmprestimosTable extends Table
             ->count();
 
         if ($existe > 0) {
-            return false;
+            throw new \RuntimeException("O usuário já tem este livro em outro empréstimo em andamento");
         }
 
         $emprestimo = $this->newEntity([
@@ -137,32 +135,31 @@ class EmprestimosTable extends Table
             'status' => Emprestimo::STATUS_ANDAMENTO
         ]);
 
-        if ($this->save($emprestimo)) {
-            return $livrosTable->registrarEmprestimo($livroId);
+        if (!$this->save($emprestimo)) {
+            throw new \RuntimeException("Ocorreu um erro, não foi possível realizar o empréstimo");
         }
 
-        return false;
+        $this->Livros->registrarEmprestimo($livroId);
     }
 
     /**
      * Registra devolução de um empréstimo (usando regra de domínio da Entity).
      */
-    public function registrarDevolucao(int $emprestimoId): bool
+    public function registrarDevolucao(int $emprestimoId): void
     {
         $emprestimo = $this->get($emprestimoId, contain: ['Livros']);
 
         try {
             $emprestimo->registrarDevolucao();
         } catch (\RuntimeException $e) {
-            return false;
+            throw new \RuntimeException($e->getMessage());
         }
 
-        if ($this->save($emprestimo)) {
-            $livrosTable = $this->getAssociation('Livros')->getTarget();
-            return $livrosTable->registrarDevolucao($emprestimo->livro_id);
+        if (!$this->save($emprestimo)) {
+            throw new \RuntimeException("Ocorreu um erro, não foi possível devolver o empréstimo");
         }
 
-        return false;
+        $this->Livros->registrarDevolucao($emprestimo->livro_id);
     }
 
     /**

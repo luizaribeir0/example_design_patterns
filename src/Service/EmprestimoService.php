@@ -3,24 +3,30 @@
 namespace App\Service;
 
 use App\Model\Table\EmprestimosTable;
+use App\Model\Table\LivrosTable;
 use Cake\I18n\FrozenDate;
 use Cake\ORM\TableRegistry;
 
 class EmprestimoService
 {
     private EmprestimosTable $emprestimosTable;
+    private LivrosTable $livrosTable;
 
     public function __construct()
     {
         $this->emprestimosTable = TableRegistry::getTableLocator()->get('Emprestimos');
+        $this->livrosTable = TableRegistry::getTableLocator()->get('Livros');
     }
 
     public function listarEmprestimos()
     {
-        $this->emprestimosTable->atualizarAtrasados();
+        try {
+            $this->emprestimosTable->atualizarAtrasados();
 
-        return $this->emprestimosTable->find()
-            ->contain(['Livros', 'Usuarios']);
+            return $this->emprestimosTable->find()->contain(['Livros', 'Usuarios']);
+        } catch (\Cake\Datasource\Exception\RecordNotFoundException $e) {
+            throw new \RuntimeException($e->getMessage());
+        }
     }
 
     public function obterEmprestimo(int $id)
@@ -28,26 +34,37 @@ class EmprestimoService
         return $this->emprestimosTable->get($id, ['contain' => ['Livros', 'Usuarios']]);
     }
 
-    public function registrarEmprestimo(array $dados): bool
+    public function registrarEmprestimo(array $dados): void
     {
         $livroId = (int)$dados['livro_id'];
         $usuarioId = (int)$dados['usuario_id'];
         $data = new FrozenDate($dados['data_emprestimo']);
-        return $this->emprestimosTable->registrarEmprestimo($livroId, $usuarioId, $data);
+
+        try {
+            $this->emprestimosTable->registrarEmprestimo($livroId, $usuarioId, $data);
+        } catch (\Cake\Datasource\Exception\RecordNotFoundException $e) {
+            throw new \RuntimeException($e->getMessage());
+        }
     }
 
-    public function registrarDevolucao(int $id): bool
+    public function registrarDevolucao(int $id): void
     {
-        return $this->emprestimosTable->registrarDevolucao($id);
+        try {
+            $this->emprestimosTable->registrarDevolucao($id);
+        } catch (\Cake\Datasource\Exception\RecordNotFoundException $e) {
+            throw new \RuntimeException($e->getMessage());
+        }
     }
 
     public function deletarEmprestimo(int $id): bool
     {
         try {
             $emprestimo = $this->emprestimosTable->get($id);
+            $this->livrosTable->registrarDevolucao($emprestimo->livro_id);
+
             return $this->emprestimosTable->delete($emprestimo);
         } catch (\Cake\Datasource\Exception\RecordNotFoundException $e) {
-            return false;
+            throw new \RuntimeException($e->getMessage());
         }
     }
 

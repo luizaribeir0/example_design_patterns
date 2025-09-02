@@ -96,28 +96,28 @@ class LivrosTable extends Table
     /**
      * Reduz a quantidade disponível em 1 ao emprestar um livro.
      */
-    public function registrarEmprestimo(int $livroId): bool
+    public function registrarEmprestimo(int $livroId): void
     {
         $livro = $this->get($livroId);
         if (!$livro->estaDisponivel()) {
-            return false;
+            throw new \RuntimeException("O livro " . $livro->titulo . " não está disponível para empréstimo");
         }
 
         $livro->quantidade_disponivel -= 1;
-        return (bool)$this->save($livro);
+        $this->save($livro);
     }
 
     /**
      * Aumenta a quantidade disponível em 1 ao devolver um livro.
      */
-    public function registrarDevolucao(int $livroId): bool
+    public function registrarDevolucao(int $livroId): void
     {
         $livro = $this->get($livroId);
         if (!($livro->quantidade_disponivel < $livro->quantidade_total)) {
-            return false;
+            throw new \RuntimeException("O livro " . $livro->titulo . " já foi devolvido");
         }
 
         $livro->quantidade_disponivel += 1;
-        return (bool)$this->save($livro);
+        $this->save($livro);
     }
 }
