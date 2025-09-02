@@ -107,7 +107,7 @@ class EmprestimosTable extends Table
     }
 
     /**
-     * Cria um novo empréstimo, se o livro estiver disponível.
+     * Cria e salva um novo empréstimo, se o livro estiver disponível.
      */
     public function registrarEmprestimo(int $livroId, int $usuarioId, FrozenDate $data): bool
     {
@@ -125,6 +125,7 @@ class EmprestimosTable extends Table
                 'status' => Emprestimo::STATUS_ANDAMENTO
             ])
             ->count();
+
         if ($existe > 0) {
             return false;
         }
@@ -137,7 +138,6 @@ class EmprestimosTable extends Table
         ]);
 
         if ($this->save($emprestimo)) {
-            // desconta do estoque
             return $livrosTable->registrarEmprestimo($livroId);
         }
 
@@ -145,21 +145,19 @@ class EmprestimosTable extends Table
     }
 
     /**
-     * Registra devolução de um empréstimo.
+     * Registra devolução de um empréstimo (usando regra de domínio da Entity).
      */
     public function registrarDevolucao(int $emprestimoId): bool
     {
         $emprestimo = $this->get($emprestimoId, contain: ['Livros']);
 
-        if ($emprestimo->status !== Emprestimo::STATUS_ANDAMENTO) {
+        try {
+            $emprestimo->registrarDevolucao();
+        } catch (\RuntimeException $e) {
             return false;
         }
 
-        $emprestimo->status = Emprestimo::STATUS_DEVOLVIDO;
-        $emprestimo->data_devolucao = FrozenDate::today();
-
         if ($this->save($emprestimo)) {
-            // devolve ao estoque
             $livrosTable = $this->getAssociation('Livros')->getTarget();
             return $livrosTable->registrarDevolucao($emprestimo->livro_id);
         }
@@ -168,22 +166,21 @@ class EmprestimosTable extends Table
     }
 
     /**
-     * Atualiza status de atrasados (se a data de devolução passou e não foi devolvido).
+     * Atualiza status de empréstimos atrasados (delegando regra para a Entity).
      */
     public function atualizarAtrasados(): int
     {
         $atrasados = $this->find()
-            ->where([
-                'status' => Emprestimo::STATUS_ANDAMENTO,
-                'data_emprestimo <' => FrozenDate::today()->subDays(7) // prazo de 7 dias
-            ])
+            ->where(['status' => Emprestimo::STATUS_ANDAMENTO])
             ->all();
 
         $count = 0;
         foreach ($atrasados as $emp) {
-            $emp->status = Emprestimo::STATUS_ATRASADO;
-            if ($this->save($emp)) {
-                $count++;
+            if ($emp->atrasado()) {
+                $emp->marcarAtrasado();
+                if ($this->save($emp)) {
+                    $count++;
+                }
             }
         }
 

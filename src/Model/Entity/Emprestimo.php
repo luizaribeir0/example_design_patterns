@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Model\Entity;
 
+use Cake\I18n\FrozenDate;
 use Cake\ORM\Entity;
 
 /**
@@ -26,15 +27,6 @@ class Emprestimo extends Entity
     public const STATUS_ATRASADO = 'ATRASADO';
     public const STATUS_DEVOLVIDO = 'DEVOLVIDO';
 
-    /**
-     * Fields that can be mass assigned using newEntity() or patchEntity().
-     *
-     * Note that when '*' is set to true, this allows all unspecified fields to
-     * be mass assigned. For security purposes, it is advised to set '*' to false
-     * (or remove it), and explicitly make individual fields accessible as needed.
-     *
-     * @var array<string, bool>
-     */
     protected array $_accessible = [
         'livro_id' => true,
         'usuario_id' => true,
@@ -46,4 +38,56 @@ class Emprestimo extends Entity
         'livro' => true,
         'usuario' => true,
     ];
+
+    /**
+     * Verifica se o empréstimo está em andamento.
+     */
+    public function emAndamento(): bool
+    {
+        return $this->status === self::STATUS_ANDAMENTO;
+    }
+
+    /**
+     * Verifica se o empréstimo está devolvido.
+     */
+    public function devolvido(): bool
+    {
+        return $this->status === self::STATUS_DEVOLVIDO;
+    }
+
+    /**
+     * Verifica se o empréstimo está atrasado.
+     */
+    public function atrasado(): bool
+    {
+        if ($this->status !== self::STATUS_ANDAMENTO) {
+            return false;
+        }
+
+        $prazo = 7; // dias de prazo fixo
+        return $this->data_emprestimo < FrozenDate::today()->subDays($prazo);
+    }
+
+    /**
+     * Registra devolução (sem persistir ainda).
+     */
+    public function registrarDevolucao(): void
+    {
+        if (!$this->emAndamento()) {
+            throw new \RuntimeException("Não é possível devolver: o empréstimo não está em andamento.");
+        }
+
+        $this->status = self::STATUS_DEVOLVIDO;
+        $this->data_devolucao = FrozenDate::today();
+    }
+
+    /**
+     * Marca como atrasado (sem persistir ainda).
+     */
+    public function marcarAtrasado(): void
+    {
+        if ($this->emAndamento()) {
+            $this->status = self::STATUS_ATRASADO;
+        }
+    }
 }
